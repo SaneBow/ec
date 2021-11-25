@@ -203,6 +203,8 @@ int main(int argc, char *argv[])
     sigemptyset(&sig_int_handler.sa_mask);
     sig_int_handler.sa_flags = 0;
     sigaction(SIGINT, &sig_int_handler, NULL);
+    sig_int_handler.sa_handler = SIG_IGN;
+    sigaction(SIGPIPE, &sig_int_handler, NULL);
 
     echo_state = speex_echo_state_init_mc(frame_size,
                                           config.filter_length,

@@ -6,6 +6,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 #include <pthread.h>
+#include <errno.h>
 
 #include "pa_ringbuffer.h"
 #include "conf.h"
@@ -20,32 +21,42 @@ void *fifo_thread(void *ptr)
     conf_t *conf = (conf_t *)ptr;
     ring_buffer_size_t size1, size2, available;
     void *data1, *data2;
-    int fd = open(conf->out_fifo, O_WRONLY);      // will block until reader is available
-    if (fd < 0) {
-        printf("failed to open %s, error %d\n", conf->out_fifo, fd);
-        return NULL;
-    }
 
-    // clear
-    PaUtil_AdvanceRingBufferReadIndex(&g_out_ringbuffer, PaUtil_GetRingBufferReadAvailable(&g_out_ringbuffer));
     while (!g_is_quit)
     {
-        available = PaUtil_GetRingBufferReadAvailable(&g_out_ringbuffer);
-        PaUtil_GetRingBufferReadRegions(&g_out_ringbuffer, available, &data1, &size1, &data2, &size2);
-        if (size1 > 0) {
-            int result = write(fd, data1, size1 * g_out_ringbuffer.elementSizeBytes);
-            // printf("write %d of %d\n", result / 2, size1);
-            if (result > 0) {
-                PaUtil_AdvanceRingBufferReadIndex(&g_out_ringbuffer, result / g_out_ringbuffer.elementSizeBytes);
-            } else {
-                sleep(1);
-            }
+        int fd = open(conf->out_fifo, O_WRONLY);      // will block until reader is available
+        if (fd < 0) {
+            printf("failed to open %s, error %d\n", conf->out_fifo, fd);
+            return NULL;
         } else {
-            usleep(100000);
+            printf("Microphone-Consumer connected\n");
         }
-    }
 
-    close(fd);
+        // clear
+        PaUtil_AdvanceRingBufferReadIndex(&g_out_ringbuffer, PaUtil_GetRingBufferReadAvailable(&g_out_ringbuffer));
+        while (!g_is_quit)
+        {
+            available = PaUtil_GetRingBufferReadAvailable(&g_out_ringbuffer);
+            PaUtil_GetRingBufferReadRegions(&g_out_ringbuffer, available, &data1, &size1, &data2, &size2);
+            if (size1 > 0) {
+                errno = 0;
+                int result = write(fd, data1, size1 * g_out_ringbuffer.elementSizeBytes);
+                //printf("write %d of %ld\n", result / 2, size1);
+                if (result > 0) {
+                    PaUtil_AdvanceRingBufferReadIndex(&g_out_ringbuffer, result / g_out_ringbuffer.elementSizeBytes);
+                } else if (result < 0 && errno == EPIPE) {
+                    printf("Microphone-Consumer disconnected\n");
+                    break;
+                } else {
+                    sleep(1);
+                }
+            } else {
+                usleep(100000);
+            }
+        }
+
+        close(fd);
+    }
 
     return NULL;
 }

@@ -15,6 +15,7 @@
 
 #include "conf.h"
 #include "audio.h"
+#include "util.h"
 
 const char *usage =
     "Usage:\n %s [options]\n"
@@ -171,7 +172,7 @@ int main(int argc, char *argv[])
         }
     }
 
-    int frame_size = config.rate * frame_len_ms / 1000; // ms
+    int frame_size = power2(config.rate * frame_len_ms / 1000); // ms
     config.filter_length = config.rate * filter_len_ms / 1000;  // ms
 
     if (save_audio)
